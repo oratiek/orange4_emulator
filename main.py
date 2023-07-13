@@ -17,27 +17,28 @@ class Register:
         self.Y_ = 0x0
         self.Z_ = 0x0
         self.PC = 0x0
-        self.SP = 0x0 # stack pointer
+        self.SP = 0xF0 # stack pointer
         self.FLAG = 0
 
 register = Register()
 memory = [0x0 for i in range(0xff)]
-stack_index = 0
+stack_index = 0xf0
 stack_size = 10
+
 def push(val):
     global stack_index
-    if stack_index > stack_size-1:
+    if register.SP > register.SP+stack_size-1:
         return False
-    memory[stack_index] = val 
-    stack_index += 1
+    memory[register.SP] = val 
+    #register.SP += 1
     return True
 
 def pop():
-    if stack_index < 0:
+    if register.SP < 0:
         return False
-    val = memory[0]
-    memory[0] = 0
-    memory[0:] = memory[1:] + [0]
+    val = memory[register.SP]
+    memory[register.SP] = 0
+    memory[register.SP:] = memory[register.SP+1:] + [0]
     return val
 
 LED = [0, 0, 0, 0, 0, 0, 0]
@@ -170,9 +171,12 @@ def execute(mnemonic, operands):
             else:
                 register.FLAG = 1
         case "call":
+            push(register.PC)
             register.PC = operands[0]
+            #register.PC += 1
         case "ret": #呼び出し元に制御を戻す
-            pass
+            register.PC = pop()
+            #print("from ret: debug:{}".format(register.PC))
         case "pushA":
             return push(register.A)
         case "popA":
@@ -218,7 +222,6 @@ assembly = [
         "call 0x0"
         ]
 
-
 assembly = [
         "ldyi 0x55", # Yに0xAを入れる
         "scall 1", # Yに対応する値を点灯させる
@@ -227,25 +230,6 @@ assembly = [
         "ay", # Aの値をYに入れる
         "scall 1", # Yに対応する値を点灯させる
         "call 0x0"
-        ]
-
-assembly = [ # ret命令が未実装のため動作しない
-        "ldyi 0x0", # start        #0
-        "call 0xB", # incLoop      #1
-        "addyi 0x1",               #2
-        "cpyi 0x7",                #3
-        "jmpf 0x1",                #4
-        "ldyi 0x6",                #5
-        "addyi 0xf", # decLoop     #6
-        "call 0xB",                #7
-        "cpyi 0x1",                #8
-        "jmpf 0x6",                #9
-        "jmpf 0x0",                #A
-        "scall 0x1", # ledOnOff    #B
-        "ldi 0x0",                 #C
-        "scall 0xc",               #D
-        "scall 0x2",               #E
-        "ret"                      #F
         ]
 
 assembly = [
@@ -273,8 +257,6 @@ assembly = [
         "call 0x00"
         ]
 
-
-
 # increment 7SEG
 assembly = [
         "ldi 0x0",
@@ -282,7 +264,6 @@ assembly = [
         "outn",
         "call 0x1"
         ]
-
 
 # Lチカ
 assembly = [
@@ -309,8 +290,6 @@ assembly = [
         "call 0x1"
         ]
 
-
-
 # increment binary LED by 1 sec
 assembly = [
         "ldi 0xA", # register.A = 10 (0xC)
@@ -328,6 +307,37 @@ assembly = [
         "scall 1", # turn on LED related to reigster Y
         "call 0x0" # jump 0x0 if register FLAG is 1
         ]
+assembly = """
+_start:
+    ldi 0x1
+    call increment
+_increment:
+    addi 0x1
+    ay
+    scall 1
+    ret
+"""
+
+
+assembly = [ 
+        "ldyi 0x0", # start        #0
+        "call 0xB", # incLoop      #1
+        "addyi 0x1",               #2
+        "cpyi 0x7",                #3
+        "jmpf 0x1",                #4
+        "ldyi 0x6",                #5
+        "addyi 0xf", # decLoop     #6
+        "call 0xB",                #7
+        "cpyi 0x1",                #8
+        "jmpf 0x6",                #9
+        "jmpf 0x0",                #A
+        "scall 0x1", # ledOnOff    #B
+        "ldi 0x0",                 #C
+        "scall 0xc",               #D
+        "scall 0x2",               #E
+        "ret"                      #F
+        ]
+
 
 for i in range(len(assembly)):
     memory[i] = assembly[i]
@@ -341,13 +351,12 @@ def convert_to_hex(val):
     return int(val, 16)
 
 freq = 10_000
-freq = 10
+freq = 50
 interval = 1/freq
 
 while True:
     time.sleep(interval)
     #print(register.PC) 
-
 
     #########
     # FETCH #
@@ -362,6 +371,7 @@ while True:
     ##########
     # DECODE #
     ##########
+    #print("debug {}".format(register.PC))
     instruction = memory[register.PC]
     #print("   :",register.PC, instruction)
     opecode, *operands = instruction.split(" ")
@@ -383,6 +393,8 @@ while True:
     ##############
     led = ",".join(list(map(str, LED)))
     ports = ",".join(list(map(str, PORTS)))
-    msg = "\rLED:{} PORTS:{} 7SEG:{} RA:{},RY:{}".format(led, ports, SEG_LED, register.A, register.Y)
+    msg = "\rLED:{} PORTS:{} 7SEG:{} RA:{},RY:{},PC:{}".format(led, ports, SEG_LED, register.A, register.Y, register.PC)
+    #msg = "LED:{} PORTS:{} 7SEG:{} RA:{},RY:{},PC:{} INST:{} stack:{}\n".format(led, ports, SEG_LED, register.A, register.Y, register.PC, instruction,  "".join(list(map(str,memory[240:]))))
     print(msg, end="")
+    #print(memory)
     #print(LED)
